@@ -18,7 +18,7 @@ import {
 } from "firebase/firestore";
 
 
-type Msg = { id: string; text: string; senderId: string; createdAt?: any };
+type Msg = any;
 const REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "😡"] as const;
 
 const STICKERS = [
@@ -150,62 +150,6 @@ async function sendSticker(s: { id: string; url: string }) {
   setShowStickers(false);
 }
 
-async function toggleReaction(messageId: string, emoji: string) {
-  if (!user || !roomId) return;
-
-  const msgRef = doc(db, "rooms", roomId, "messages", messageId);
-  const field = `reactions.${emoji}`;
-
-  const m: any = (messages as any).find((x: any) => x.id === messageId);
-  const arr: string[] = (m?.reactions?.[emoji] ?? []);
-  const has = arr.includes(user.uid);
-
-  await updateDoc(msgRef, {
-    [field]: has ? arrayRemove(user.uid) : arrayUnion(user.uid),
-  });
-}
-
-async function sendImage(file: File) {
-  if (!user || !roomId) return;
-
-  setUploading(true);
-  try {
-    const safeName = file.name.replace(/\s+/g, "_");
-    const path = `rooms/${roomId}/images/${Date.now()}_${safeName}`;
-    const storageRef = ref(storage, path);
-
-    await uploadBytes(storageRef, file);
-    const url = await getDownloadURL(storageRef);
-
-    await addDoc(collection(db, "rooms", roomId, "messages"), {
-      type: "image",
-      imageUrl: url,
-      imagePath: path,
-      senderId: user.uid,
-      createdAt: serverTimestamp(),
-      reactions: {},
-    });
-
-    await updateDoc(doc(db, "rooms", roomId), { lastMessageAt: serverTimestamp() });
-  } finally {
-    setUploading(false);
-  }
-}
-async function sendSticker(s: { id: string; url: string }) {
-  if (!user || !roomId) return;
-
-  await addDoc(collection(db, "rooms", roomId, "messages"), {
-    type: "sticker",
-    stickerId: s.id,
-    stickerUrl: s.url,
-    senderId: user.uid,
-    createdAt: serverTimestamp(),
-    reactions: {},
-  });
-
-  await updateDoc(doc(db, "rooms", roomId), { lastMessageAt: serverTimestamp() });
-  setShowStickers(false);
-}
 async function toggleReaction(messageId: string, emoji: string) {
   if (!user || !roomId) return;
 
