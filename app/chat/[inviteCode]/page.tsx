@@ -50,6 +50,8 @@ export default function ChatPage({
   const [text, setText] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
 const [showStickers, setShowStickers] = useState(false);
+const [unread, setUnread] = useState(0);
+const lastSeenRef = useRef<number>(Date.now());
 
   const msgsRef = useMemo(() => {
     if (!roomId) return null;
@@ -114,17 +116,64 @@ const [showStickers, setShowStickers] = useState(false);
     })();
   }, [ready, user, inviteCode]);
 
-  // listen messages
-  useEffect(() => {
-    if (!msgsRef) return;
-    const q = query(msgsRef, orderBy("createdAt", "asc"), limit(50));
-    const unsub = onSnapshot(q, (snap) => {
-      const arr: Msg[] = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
-      setMessages(arr);
-      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
-    });
-    return () => unsub();
-  }, [msgsRef]);
+ // listen messages
+useEffect(() => {
+  if (!msgsRef) return;
+
+  const q = query(msgsRef, orderBy("createdAt", "asc"), limit(50));
+  const unsub = onSnapshot(q, (snap) => {
+    const arr: Msg[] = snap.docs.map((d) => ({
+      id: d.id,
+      ...(d.data() as any),
+    }));
+
+    setMessages(arr);
+    if (!document.hidden) {
+  const newest = arr[arr.length - 1];
+  const newestTime =
+    newest?.createdAt?.toDate?.()?.getTime?.() ??
+    (typeof newest?.createdAt === "number" ? newest.createdAt : 0);
+
+  if (newestTime) lastSeenRef.current = newestTime;
+}
+
+    // 🔴 kiểm tra tin mới khi đang ẩn tab
+    const newest = arr[arr.length - 1];
+    const newestTime =
+      newest?.createdAt?.toDate?.()?.getTime?.() ??
+      (typeof newest?.createdAt === "number" ? newest.createdAt : 0);
+
+    const isFromOther =
+      newest?.senderId && newest.senderId !== user?.uid;
+
+    if (document.hidden && isFromOther && newestTime > lastSeenRef.current) {
+      setUnread((u) => u + 1);
+    }
+
+    setTimeout(() => {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, 50);
+  });
+
+  return () => unsub();
+}, [msgsRef, user]);
+
+useEffect(() => {
+  const base = "Chat 1–1";
+  document.title = unread > 0 ? `🔴 ${unread} tin nhắn mới` : base;
+}, [unread]);
+useEffect(() => {
+  function onVis() {
+    if (!document.hidden) {
+      setUnread(0);
+      lastSeenRef.current = Date.now();
+      document.title = "Chat 1–1";
+    }
+  }
+
+  document.addEventListener("visibilitychange", onVis);
+  return () => document.removeEventListener("visibilitychange", onVis);
+}, []);
 
   async function send() {
   if (!user || !roomId) return;
