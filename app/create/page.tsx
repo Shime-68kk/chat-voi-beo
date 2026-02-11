@@ -16,21 +16,24 @@ export default function CreateInvitePage() {
     const inviteCode = nanoid(10);
     const roomId = nanoid(16);
 
-    await setDoc(doc(db, "rooms", roomId), {
-      members: [user.uid],
-      createdAt: serverTimestamp(),
-      lastMessageAt: serverTimestamp(),
-    });
+   await setDoc(doc(db, "rooms", roomId), {
+  members: [user.uid],
+  createdAt: serverTimestamp(),
+  lastMessageAt: serverTimestamp(),
+  seenAt: {},         
+  typing: {},         
+});
 
     const expiresAt = Date.now() + 1000 * 60 * 60 * 24; // 24h
 
     await setDoc(doc(db, "invites", inviteCode), {
-      roomId,
-      hostUid: user.uid,
-      guestUid: null,
-      status: "open",
-      createdAt: serverTimestamp(),
-    });
+  roomId,
+  hostUid: user.uid,
+  guestUid: null,
+  status: "open",
+  createdAt: serverTimestamp(),
+  expiresAt,
+});
 
     setLink(`${window.location.origin}/chat/${inviteCode}`);
   }

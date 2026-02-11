@@ -53,6 +53,7 @@ const [showStickers, setShowStickers] = useState(false);
 const [unread, setUnread] = useState(0);
 const [otherSeenAt, setOtherSeenAt] = useState<any>(null);
 const [otherTyping, setOtherTyping] = useState(false);
+const [atBottom, setAtBottom] = useState(true);
 
 const lastSeenRef = useRef<number>(Date.now());
 const typingTimerRef = useRef<any>(null);
@@ -194,18 +195,18 @@ useEffect(() => {
   return () => unsub();
 }, [roomId, user]);
 useEffect(() => {
+  useEffect(() => {
   if (!roomId || !user) return;
 
   async function markSeen() {
-  if (document.hidden) return;
-  if (!roomId || !user) return; // ✅ thêm dòng này
+    if (document.hidden) return;
+    if (!atBottom) return;              
+    await updateDoc(doc(db, "rooms", roomId), {
+      [`seenAt.${user.uid}`]: serverTimestamp(),
+    });
+  }
 
-  const rid = roomId; // ✅ giúp TS chắc chắn là string
-  await updateDoc(doc(db, "rooms", rid), {
-    [`seenAt.${user.uid}`]: serverTimestamp(),
-  });
-}
-
+  
   markSeen();
 
   const onVis = () => {
@@ -214,7 +215,8 @@ useEffect(() => {
 
   document.addEventListener("visibilitychange", onVis);
   return () => document.removeEventListener("visibilitychange", onVis);
-}, [roomId, user, messages.length]);
+}, [roomId, user, atBottom]); 
+
 
 
 useEffect(() => {
@@ -225,7 +227,7 @@ useEffect(() => {
   function onVis() {
     if (!document.hidden) {
       setUnread(0);
-      lastSeenRef.current = Number.MAX_SAFE_INTEGER;
+      lastSeenRef.current = Date.now();
       document.title = "Chat 1–1";
     }
   }
@@ -313,7 +315,15 @@ async function toggleReaction(messageId: string, emoji: string) {
   </div>
 )}
 
-      <div className="flex-1 overflow-auto p-4 space-y-3 bg-neutral-50">
+      <div
+  className="flex-1 overflow-auto p-4 space-y-3 bg-neutral-50"
+  onScroll={(e) => {
+    const el = e.currentTarget;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    setAtBottom(nearBottom);
+  }}
+>
+
   {(messages as any).map((m: any) => {
     const mine = m.senderId === user?.uid;
     const rx = m.reactions || {};
