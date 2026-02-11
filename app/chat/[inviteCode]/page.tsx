@@ -26,6 +26,14 @@ const STICKERS = [
   //{ id: "2", url: "/stickers/2.png" },
   //{ id: "3", url: "/stickers/3.png" },
 ];
+function formatTime(ts: any) {
+  const d =
+    ts?.toDate?.() ??
+    (typeof ts === "number" ? new Date(ts) : null);
+
+  if (!d) return "";
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); // 21:26
+}
 
 
 export default function ChatPage({
@@ -212,6 +220,9 @@ async function toggleReaction(messageId: string, emoji: string) {
               </div>
             )}
           </div>
+          <div className={"mt-1 text-xs text-neutral-500 " + (mine ? "text-right" : "text-left")}>
+  {formatTime(m.createdAt)}
+</div>
 
           <div className={"mt-1 flex gap-1 " + (mine ? "justify-end" : "justify-start")}>
             {REACTIONS.map((emoji) => (
