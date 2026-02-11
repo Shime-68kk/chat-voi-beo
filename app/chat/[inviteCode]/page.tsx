@@ -197,11 +197,14 @@ useEffect(() => {
   if (!roomId || !user) return;
 
   async function markSeen() {
-    if (document.hidden) return;
-    await updateDoc(doc(db, "rooms", roomId), {
-      [`seenAt.${user.uid}`]: serverTimestamp(),
-    });
-  }
+  if (document.hidden) return;
+  if (!roomId || !user) return; // ✅ thêm dòng này
+
+  const rid = roomId; // ✅ giúp TS chắc chắn là string
+  await updateDoc(doc(db, "rooms", rid), {
+    [`seenAt.${user.uid}`]: serverTimestamp(),
+  });
+}
 
   markSeen();
 
