@@ -53,7 +53,8 @@ const [showStickers, setShowStickers] = useState(false);
 const [unread, setUnread] = useState(0);
 const [otherSeenAt, setOtherSeenAt] = useState<any>(null);
 const [otherTyping, setOtherTyping] = useState(false);
-const [atBottom, setAtBottom] = useState(true);
+const [atBottom, setAtBottom] = useState(false);
+
 
 const lastSeenRef = useRef<number>(Date.now());
 const typingTimerRef = useRef<any>(null);
@@ -124,12 +125,15 @@ useEffect(() => {
   return () => {
     if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
 
-    // cố tắt typing khi rời trang (an toàn)
     if (roomId && user) {
-      updateDoc(doc(db, "rooms", roomId), {
-        [`typing.${user.uid}`]: false,
-      }).catch(() => {});
-    }
+  const rid = roomId; 
+  const uid = user.uid;
+
+  updateDoc(doc(db, "rooms", rid), {
+    [`typing.${uid}`]: false,
+  }).catch(() => {});
+}
+
   };
 }, [roomId, user]);
 
@@ -176,37 +180,18 @@ useEffect(() => {
 useEffect(() => {
   if (!roomId || !user) return;
 
-  const roomRef = doc(db, "rooms", roomId);
-  const unsub = onSnapshot(roomRef, (snap) => {
-    const room = snap.data() as any;
-    if (!room) return;
-
-    const members: string[] = room.members || [];
-    const otherUid = members.find((uid) => uid !== user.uid);
-    if (!otherUid) return;
-
-    const seen = room.seenAt || {};
-    setOtherSeenAt(seen[otherUid] || null);
-
-    const typing = room.typing || {};
-    setOtherTyping(Boolean(typing[otherUid]));
-  });
-
-  return () => unsub();
-}, [roomId, user]);
-useEffect(() => {
-  useEffect(() => {
-  if (!roomId || !user) return;
+  const rid = roomId; 
+  const uid = user.uid;
 
   async function markSeen() {
     if (document.hidden) return;
-    if (!atBottom) return;              
-    await updateDoc(doc(db, "rooms", roomId), {
-      [`seenAt.${user.uid}`]: serverTimestamp(),
+    if (!atBottom) return;
+
+    await updateDoc(doc(db, "rooms", rid), {
+      [`seenAt.${uid}`]: serverTimestamp(),
     });
   }
 
-  
   markSeen();
 
   const onVis = () => {
@@ -215,7 +200,7 @@ useEffect(() => {
 
   document.addEventListener("visibilitychange", onVis);
   return () => document.removeEventListener("visibilitychange", onVis);
-}, [roomId, user, atBottom]); 
+}, [roomId, user, atBottom]);
 
 
 
@@ -227,7 +212,6 @@ useEffect(() => {
   function onVis() {
     if (!document.hidden) {
       setUnread(0);
-      lastSeenRef.current = Date.now();
       document.title = "Chat 1–1";
     }
   }
@@ -251,14 +235,19 @@ useEffect(() => {
     reactions: {},
   });
 
-  await updateDoc(doc(db, "rooms", roomId), { lastMessageAt: serverTimestamp() });
+  const rid = roomId;
+await updateDoc(doc(db, "rooms", rid), { lastMessageAt: serverTimestamp() });
+
 }
 async function setTyping(isTyping: boolean) {
   if (!roomId || !user) return;
 
-  await updateDoc(doc(db, "rooms", roomId), {
-    [`typing.${user.uid}`]: isTyping,
-  });
+  const rid = roomId;
+const uid = user.uid;
+await updateDoc(doc(db, "rooms", rid), {
+  [`typing.${uid}`]: isTyping,
+});
+
 }
 
 async function sendSticker(s: { id: string; url: string }) {
