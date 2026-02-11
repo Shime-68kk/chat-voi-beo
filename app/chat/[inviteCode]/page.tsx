@@ -51,7 +51,11 @@ export default function ChatPage({
   const bottomRef = useRef<HTMLDivElement>(null);
 const [showStickers, setShowStickers] = useState(false);
 const [unread, setUnread] = useState(0);
+const [otherSeenAt, setOtherSeenAt] = useState<any>(null);
+const [otherTyping, setOtherTyping] = useState(false);
+
 const lastSeenRef = useRef<number>(Date.now());
+const typingTimerRef = useRef<any>(null);
 
   const msgsRef = useMemo(() => {
     if (!roomId) return null;
@@ -115,6 +119,18 @@ const lastSeenRef = useRef<number>(Date.now());
       }
     })();
   }, [ready, user, inviteCode]);
+useEffect(() => {
+  return () => {
+    if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+
+    // cố tắt typing khi rời trang (an toàn)
+    if (roomId && user) {
+      updateDoc(doc(db, "rooms", roomId), {
+        [`typing.${user.uid}`]: false,
+      }).catch(() => {});
+    }
+  };
+}, [roomId, user]);
 
  // listen messages
 useEffect(() => {
@@ -136,7 +152,6 @@ useEffect(() => {
 
   if (newestTime) lastSeenRef.current = newestTime;
 }
-
     // 🔴 kiểm tra tin mới khi đang ẩn tab
     const newest = arr[arr.length - 1];
     const newestTime =
@@ -157,6 +172,47 @@ useEffect(() => {
 
   return () => unsub();
 }, [msgsRef, user]);
+useEffect(() => {
+  if (!roomId || !user) return;
+
+  const roomRef = doc(db, "rooms", roomId);
+  const unsub = onSnapshot(roomRef, (snap) => {
+    const room = snap.data() as any;
+    if (!room) return;
+
+    const members: string[] = room.members || [];
+    const otherUid = members.find((uid) => uid !== user.uid);
+    if (!otherUid) return;
+
+    const seen = room.seenAt || {};
+    setOtherSeenAt(seen[otherUid] || null);
+
+    const typing = room.typing || {};
+    setOtherTyping(Boolean(typing[otherUid]));
+  });
+
+  return () => unsub();
+}, [roomId, user]);
+useEffect(() => {
+  if (!roomId || !user) return;
+
+  async function markSeen() {
+    if (document.hidden) return;
+    await updateDoc(doc(db, "rooms", roomId), {
+      [`seenAt.${user.uid}`]: serverTimestamp(),
+    });
+  }
+
+  markSeen();
+
+  const onVis = () => {
+    if (!document.hidden) markSeen();
+  };
+
+  document.addEventListener("visibilitychange", onVis);
+  return () => document.removeEventListener("visibilitychange", onVis);
+}, [roomId, user, messages.length]);
+
 
 useEffect(() => {
   const base = "Chat 1–1";
@@ -166,7 +222,7 @@ useEffect(() => {
   function onVis() {
     if (!document.hidden) {
       setUnread(0);
-      lastSeenRef.current = Date.now();
+      lastSeenRef.current = Number.MAX_SAFE_INTEGER;
       document.title = "Chat 1–1";
     }
   }
@@ -179,6 +235,7 @@ useEffect(() => {
   if (!user || !roomId) return;
   const t = text.trim();
   if (!t) return;
+  setTyping(false);
 
   setText("");
   await addDoc(collection(db, "rooms", roomId, "messages"), {
@@ -191,6 +248,14 @@ useEffect(() => {
 
   await updateDoc(doc(db, "rooms", roomId), { lastMessageAt: serverTimestamp() });
 }
+async function setTyping(isTyping: boolean) {
+  if (!roomId || !user) return;
+
+  await updateDoc(doc(db, "rooms", roomId), {
+    [`typing.${user.uid}`]: isTyping,
+  });
+}
+
 async function sendSticker(s: { id: string; url: string }) {
   if (!user || !roomId) return;
 
@@ -230,7 +295,20 @@ async function toggleReaction(messageId: string, emoji: string) {
 
   return (
     <div className="h-[100dvh] flex flex-col">
-      <div className="p-4 border-b font-semibold">Chat 1–1</div>
+      <div className="p-4 border-b font-semibold flex items-center justify-between">
+  <span>Chat 1–1</span>
+
+  {unread > 0 && (
+    <span className="text-xs px-2 py-1 rounded-full bg-red-600 text-white">
+      {unread}
+    </span>
+  )}
+</div>
+{otherTyping && (
+  <div className="px-4 py-2 text-sm text-neutral-600">
+    Đang nhập…
+  </div>
+)}
 
       <div className="flex-1 overflow-auto p-4 space-y-3 bg-neutral-50">
   {(messages as any).map((m: any) => {
@@ -289,6 +367,12 @@ async function toggleReaction(messageId: string, emoji: string) {
     );
   })}
   <div ref={bottomRef} />
+  {otherSeenAt && (
+  <div className="text-xs text-neutral-500 text-center py-2">
+    Đã xem {formatTime(otherSeenAt)}
+  </div>
+)}
+
 </div>
 
 
@@ -305,7 +389,23 @@ async function toggleReaction(messageId: string, emoji: string) {
     <input
       className="flex-1 border rounded-2xl px-4 py-2 outline-none"
       value={text}
-      onChange={(e) => setText(e.target.value)}
+      onChange={(e) => {
+  setText(e.target.value);
+
+  // bật typing ngay khi gõ
+  setTyping(true);
+
+  // nếu còn đang đếm thì huỷ
+  if (typingTimerRef.current) {
+    clearTimeout(typingTimerRef.current);
+  }
+
+  // sau 1.2s không gõ nữa thì tắt typing
+  typingTimerRef.current = setTimeout(() => {
+    setTyping(false);
+  }, 1200);
+}}
+
       placeholder="Nhập tin nhắn…"
       onKeyDown={(e) => e.key === "Enter" && send()}
     />
